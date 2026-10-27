@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>解压气泡纸 🫧</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: "PingFang SC", "Nunito", "Microsoft YaHei", -apple-system, sans-serif;
+    background: linear-gradient(160deg, #ffe0ee 0%, #fff5fa 45%, #ffe0e8 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    user-select: none;
+  }
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; pointer-events: none;
+  }
+  .title { font-size: 20px; font-weight: 800; color: #d9578a; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(255,120,170,.25); }
+  .counter { font-size: 15px; font-weight: 700; color: #b4466e; background: rgba(255,255,255,.7); padding: 6px 16px; border-radius: 999px; box-shadow: 0 2px 10px rgba(217,87,138,.15); pointer-events: auto; }
+  .mute { pointer-events: auto; border: none; background: rgba(255,255,255,.75); color: #b4466e; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; box-shadow: 0 2px 10px rgba(217,87,138,.15); transition: transform .15s; }
+  .mute:active { transform: scale(.94); }
+  #progress-wrap { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; background: rgba(255,255,255,.55); backdrop-filter: blur(6px); display: flex; align-items: center; padding: 0 16px; gap: 10px; z-index: 10; }
+  #progress-bar { flex: 1; height: 8px; border-radius: 99px; background: #ffd3e4; overflow: hidden; }
+  #progress-fill { height: 100%; width: 0%; border-radius: 99px; background: linear-gradient(90deg, #ff9ec4, #ff6fa8); transition: width .25s ease; }
+  #progress-text { font-size: 12px; font-weight: 700; color: #b4466e; min-width: 78px; text-align: right; }
+  #grid {
+    display: grid; gap: 8px; padding: 74px 18px 42px;
+    width: min(96vw, 1100px);
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  }
+  .bubble {
+    aspect-ratio: 1; border-radius: 50%; cursor: pointer;
+    background: radial-gradient(circle at 32% 28%, #fff 0%, #ffe1ee 38%, #ffb8d5 72%, #f792bd 100%);
+    box-shadow: inset -3px -4px 8px rgba(214,90,140,.22), inset 3px 3px 8px rgba(255,255,255,.9), 0 3px 8px rgba(214,90,140,.16);
+    transition: transform .09s ease, opacity .18s;
+  }
+  .bubble:active { transform: scale(.9); }
+  .bubble.popped {
+    background: radial-gradient(circle at 50% 50%, #ffd9e8 0%, #ffeef6 55%, #fff8fb 100%);
+    box-shadow: inset 0 2px 6px rgba(214,90,140,.14);
+    transform: scale(.86); cursor: default; opacity: .8;
+  }
+  #celebrate {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; z-index: 20; pointer-events: none;
+  }
+  #celebrate.show { display: flex; }
+  .card {
+    background: rgba(255,255,255,.92); border-radius: 26px; padding: 34px 44px; text-align: center;
+    box-shadow: 0 18px 60px rgba(217,87,138,.3); animation: pop .5s cubic-bezier(.2,1.6,.4,1);
+    pointer-events: auto;
+  }
+  .card h2 { color: #d9578a; font-size: 26px; margin-bottom: 8px; }
+  .card p { color: #a55f7d; font-size: 15px; margin-bottom: 18px; }
+  .card button { border: none; background: linear-gradient(135deg,#ff8fbd,#ff6fa8); color: #fff; font-weight: 800; font-size: 15px; padding: 11px 34px; border-radius: 999px; cursor: pointer; box-shadow: 0 6px 18px rgba(255,111,168,.4); }
+  .card button:active { transform: scale(.95); }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .confetti { position: fixed; width: 10px; height: 16px; border-radius: 3px; z-index: 19; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); opacity: .9; } }
+</style>
+</head>
+<body>
+  <header>
+    <span class="title">解压气泡纸 🫧</span>
+    <span class="counter" id="counter">已戳破 0 / 288</span>
+    <button class="mute" id="mute">🔊 音效开</button>
+  </header>
+  <div id="grid"></div>
+  <div id="progress-wrap">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <span id="progress-text">0%</span>
+  </div>
+  <div id="celebrate">
+    <div class="card">
+      <h2>🎉 全部戳完啦！</h2>
+      <p>288 颗气泡，一个不剩，解压达成</p>
+      <button id="again">再来一局</button>
+    </div>
+  </div>
+<script>
+(function () {
+  const TOTAL = 288;
+  const grid = document.getElementById('grid');
+  const counter = document.getElementById('counter');
+  const fill = document.getElementById('progress-fill');
+  const ptext = document.getElementById('progress-text');
+  const celebrate = document.getElementById('celebrate');
+  const muteBtn = document.getElementById('mute');
+  let popped = 0, muted = false, audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function popSound() {
+    if (muted) return;
+    ensureAudio();
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(560 + Math.random() * 160, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.09);
+    gain.gain.setValueAtTime(0.22, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.11);
+  }
+  function updateUI() {
+    counter.textContent = '已戳破 ' + popped + ' / ' + TOTAL;
+    const pct = Math.round(popped / TOTAL * 100);
+    fill.style.width = pct + '%';
+    ptext.textContent = pct + '%';
+  }
+  function confetti() {
+    const colors = ['#ff8fbd', '#ff6fa8', '#ffd166', '#7bdff2', '#c8a2ff', '#fff'];
+    for (let i = 0; i < 90; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetti';
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.top = '-20px';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDuration = (2 + Math.random() * 2) + 's';
+      c.style.animationDelay = (Math.random() * 0.8) + 's';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 5000);
+    }
+  }
+  function build() {
+    grid.innerHTML = '';
+    popped = 0;
+    celebrate.classList.remove('show');
+    document.querySelectorAll('.confetti').forEach(c => c.remove());
+    for (let i = 0; i < TOTAL; i++) {
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      b.addEventListener('pointerdown', function () {
+        if (b.classList.contains('popped')) return;
+        b.classList.add('popped');
+        popSound();
+        popped++;
+        updateUI();
+        if (popped === TOTAL) {
+          confetti();
+          celebrate.classList.add('show');
+        }
+      });
+      grid.appendChild(b);
+    }
+    updateUI();
+  }
+  muteBtn.addEventListener('click', function () {
+    muted = !muted;
+    muteBtn.textContent = muted ? '🔇 音效关' : '🔊 音效开';
+  });
+  document.getElementById('again').addEventListener('click', build);
+  build();
+})();
+</script>
+</body>
+</html>
